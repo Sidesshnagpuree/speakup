@@ -14,7 +14,6 @@ export const PROVIDERS = {
     blurb: 'Pay-as-you-go. Your sentences are never used for training.',
     keyUrl: 'https://console.anthropic.com/settings/keys',
     keyHint: 'sk-ant-…',
-    keyPattern: /^sk-ant-/,
     adapter: claude,
   },
   gemini: {
@@ -23,8 +22,7 @@ export const PROVIDERS = {
     tag: 'free',
     blurb: 'Free tier with daily limits. Google may use what you send to improve their products, so keep real names, employers and salary details out of it.',
     keyUrl: 'https://aistudio.google.com/apikey',
-    keyHint: 'AIza…',
-    keyPattern: /^AIza/,
+    keyHint: 'AIza… or AQ…',
     adapter: gemini,
   },
 };

@@ -5,7 +5,7 @@ import { PROVIDERS, providerId, testKey, listModels } from './ai.js';
 import { LEVELS, ACCENTS, STT_LANGS } from './prompts.js';
 import { canListen, canSpeak, englishVoices, say, unlockAudio } from './speech.js';
 
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '1.1.1';
 
 const levelSeg = (s, onChange) => seg(Object.entries(LEVELS).map(([k, v]) => [k, v.label]), s.level, onChange);
 
@@ -23,7 +23,7 @@ function keyField(pid, onSaved) {
   save.addEventListener('click', async () => {
     const k = input.value.trim();
     if (!k) { msg.textContent = 'Paste your key first.'; msg.style.color = 'var(--bad)'; return; }
-    if (!p.keyPattern.test(k)) { msg.textContent = `That doesn't look like a ${p.label} key (they start with ${p.keyHint.replace('…', '')}).`; msg.style.color = 'var(--bad)'; return; }
+    if (/\s/.test(k) || k.length < 20) { msg.textContent = 'That looks too short to be an API key — paste the whole thing.'; msg.style.color = 'var(--bad)'; return; }
     save.disabled = true; msg.style.color = ''; msg.textContent = 'Testing…';
     const before = getApiKey(pid);
     try {
