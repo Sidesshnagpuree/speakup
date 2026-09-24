@@ -75,6 +75,12 @@ const app = {
     this.refreshBadges();
   },
 
+  /** Jump to Talk and start a guided drill (used by the phrasebook). */
+  startDrill(prompt) {
+    this.show('talk');
+    this.views.talk?.startDrill?.(prompt);
+  },
+
   needKey() {
     toast(`Add your ${PROVIDERS[providerId()].label} API key first`, { action: 'Set up', onAction: () => openOnboarding(app, { startStep: 2 }), ms: 5000 });
   },

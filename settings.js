@@ -5,7 +5,7 @@ import { PROVIDERS, providerId, testKey, listModels } from './ai.js';
 import { LEVELS, ACCENTS, STT_LANGS } from './prompts.js';
 import { canListen, canSpeak, englishVoices, say, unlockAudio } from './speech.js';
 
-export const APP_VERSION = '1.1.1';
+export const APP_VERSION = '1.3.0';
 
 const levelSeg = (s, onChange) => seg(Object.entries(LEVELS).map(([k, v]) => [k, v.label]), s.level, onChange);
 
@@ -135,7 +135,9 @@ export function openSettings(app) {
           (rateOut = h('b', { style: { minWidth: '52px', textAlign: 'right' } }, Number(s.rate).toFixed(2) + '×')))),
         h('div', { style: { margin: '10px 0' } }, btn('Test voice', () => { unlockAudio(); say(`Hi${s.name ? ' ' + s.name : ''}! This is how I sound. Shall we practise some English?`); }, { cls: 'soft sm', ico: 'speaker' })),
         toggle('Read replies aloud', s.autoSpeak, (v) => { s.autoSpeak = v; save(); }),
-        toggle('Send automatically when I stop speaking', s.autoSend, (v) => { s.autoSend = v; save(); }, 'Turn off if it cuts you off when you pause — then tap the mic again to keep adding, and send when ready'),
+        toggle('Send automatically when I stop speaking', s.autoSend, (v) => { s.autoSend = v; save(); }, 'Off: the mic stays open until you tap it, so you decide when to send'),
+        field('Pause before sending', seg([[1500, '1.5s'], [3000, '3s'], [5000, '5s']], Number(s.pauseMs) || 3000, (v) => { s.pauseMs = v; save(); }),
+          'How long a silence means "I\'ve finished". The mic keeps listening through shorter pauses, so you can think mid-sentence.'),
         toggle('Hands-free mode', s.handsFree, (v) => { s.handsFree = v; save(); }, 'Mic opens by itself after each reply')));
 
       body.append(h('div', { class: 'group' },

@@ -267,7 +267,11 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .fb li s { color: var(--bad); text-decoration-thickness: 2px; }
 .fb li b { color: var(--good); }
 .fb li .why { display: block; color: var(--muted); font-size: 13px; margin-top: 1px; }
-.fb-natural, .fb-word { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.fb-natural, .fb-word, .fb-minimal { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.fb-sub { margin-top: 10px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.fb-minimal { font-size: 13px; color: var(--muted); }
+.fb-minimal .lbl { display: block; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: 1px; }
+.fb.bad .fb-corrected, .fb.good .fb-corrected { font-size: 16px; }
 .fb.good .fb-natural { margin-top: 6px; }
 .fb-natural .lbl, .fb-word .lbl { font-size: 12px; font-weight: 700; color: var(--accent-text); text-transform: uppercase; letter-spacing: .04em; display: block; margin-bottom: 2px; }
 .fb-word .btn { margin-top: 6px; }
@@ -378,6 +382,27 @@ mark.bad { background: var(--mark-bad); }
 .phrase .grow { flex: 1; }
 .phrase b { display: block; }
 .phrase span { font-size: 14px; color: var(--muted); }
+
+/* Phrasebook */
+.pack { padding: 14px 16px; }
+.pack + .pack, details.card + details.card { margin-top: 12px; }
+.pack > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; font-size: 15px; }
+.pack > summary::-webkit-details-marker { display: none; }
+.pack > summary b { flex: 1; }
+.pack > summary .ic { display: inline-flex; color: var(--accent-text); }
+.pack > summary .ic svg { width: 18px; height: 18px; }
+.pack > summary::after { content: ""; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); margin-left: 2px; flex: none; }
+.pack[open] > summary::after { transform: rotate(-135deg); }
+.phrase-row, .swap { display: flex; align-items: flex-start; gap: 8px; padding: 10px 0; border-top: 1px solid var(--border); }
+.phrase-row .grow, .swap .grow { flex: 1; min-width: 0; }
+.phrase-text { font-weight: 600; font-size: 15px; }
+.phrase-ex { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.phrase-row .why, .swap .why { font-size: 13px; color: var(--muted); margin-top: 2px; line-height: 1.35; }
+.swap { display: block; }
+.swap-line s { color: var(--bad); text-decoration-thickness: 2px; }
+.swap-line b { color: var(--good); }
+.pack .icon-btn { width: 34px; height: 34px; color: var(--muted); }
+.pack .icon-btn svg { width: 18px; height: 18px; }
 
 /* Review */
 .practice-card { display: flex; align-items: center; gap: 14px; }

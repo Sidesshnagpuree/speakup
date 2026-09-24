@@ -68,6 +68,11 @@ export function createTalk(app) {
 
   return {
     id: 'talk', el, title: 'Talk', chat,
+    startDrill(prompt) {
+      if (!getApiKey()) { app.needKey(); return; }
+      chat.pause();
+      chat.kickoff(prompt);
+    },
     actions: () => [iconBtn('newchat', 'New conversation', newChat)],
     onShow() { chat.scroll(true); },
     onHide() { chat.pause(); },

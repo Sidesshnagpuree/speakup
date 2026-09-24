@@ -127,27 +127,37 @@ export class Chat {
         h('button', { type: 'button', onclick: () => this.check(m, m.prev || '') }, 'Retry'));
     }
     const speakBtn = (text) => canSpeak ? iconBtn('speaker', 'Listen', () => { unlockAudio(); say(text); }) : null;
-    const naturalEl = fb.natural ? h('div', { class: 'fb-natural' },
-      h('span', { class: 'lbl' }, 'Sounds more natural'),
-      h('div', { class: 'fb-line' }, h('span', null, fb.natural), speakBtn(fb.natural))) : null;
     const wordEl = fb.useful ? this.usefulWordNode(fb.useful) : null;
+    const diffLine = (target, cls) => {
+      const marked = markChanges(m.text, target);
+      return h('span', { class: cls }, ...marked.flatMap((t, i) => [i ? ' ' : '', t.changed ? h('mark', null, t.w) : t.w]));
+    };
+
+    // The headline is always what they should say instead.
+    const suggestion = fb.natural || fb.corrected;
+    const showSuggestion = !!fb.mistakes.length || (!!fb.natural && !sameText(fb.natural, m.text));
 
     if (!fb.mistakes.length) {
+      if (!showSuggestion) {
+        return h('div', { class: 'fb good' }, h('div', { class: 'fb-head', html: I.checkCircle + '<span>Correct</span>' }), wordEl);
+      }
       return h('div', { class: 'fb good' },
-        h('div', { class: 'fb-head', html: I.checkCircle + '<span>Correct</span>' }),
-        naturalEl, wordEl);
+        h('div', { class: 'fb-head', html: I.checkCircle + '<span>Correct — even better</span>' }),
+        h('div', { class: 'fb-line' }, diffLine(suggestion, 'fb-corrected'), speakBtn(suggestion)),
+        wordEl);
     }
-    const marked = markChanges(m.text, fb.corrected);
-    const corrected = h('span', { class: 'fb-corrected' },
-      ...marked.flatMap((t, i) => [i ? ' ' : '', t.changed ? h('mark', null, t.w) : t.w]));
     const n = fb.mistakes.length;
+    const minimal = fb.natural && !sameText(fb.natural, fb.corrected)
+      ? h('div', { class: 'fb-minimal' }, h('span', { class: 'lbl' }, 'Minimal fix'), h('span', null, fb.corrected))
+      : null;
     return h('div', { class: 'fb bad' },
-      h('div', { class: 'fb-head', html: I.pencil + `<span>${n} ${n === 1 ? 'fix' : 'fixes'}</span>` }),
-      h('div', { class: 'fb-line' }, corrected, speakBtn(fb.corrected)),
+      h('div', { class: 'fb-head', html: I.pencil + '<span>Say this instead</span>' }),
+      h('div', { class: 'fb-line' }, diffLine(suggestion, 'fb-corrected'), speakBtn(suggestion)),
+      h('div', { class: 'fb-sub' }, `${n} ${n === 1 ? 'fix' : 'fixes'}`),
       h('ul', null, fb.mistakes.map((x) => h('li', null,
         h('span', { class: 'fix' }, x.wrong ? h('s', null, x.wrong) : null, x.wrong ? ' → ' : '', h('b', null, x.right || '(remove)')),
         h('span', { class: 'why' }, x.explanation)))),
-      naturalEl, wordEl);
+      minimal, wordEl);
   }
 
   usefulWordNode(w) {
@@ -192,7 +202,9 @@ export class Chat {
     const who = this.partner();
     const map = {
       idle: note || (store.state.settings.handsFree && canListen ? 'Hands-free is on — tap the mic to start' : ''),
-      listening: 'Listening… tap ■ when you finish',
+      listening: store.state.settings.autoSend
+        ? `Listening — keep going; I'll send after a ${((Number(store.state.settings.pauseMs) || 3000) / 1000).toFixed(1).replace('.0', '')}s pause`
+        : 'Listening… tap ■ when you finish',
       thinking: `${who} is thinking…`,
       speaking: `${who} is speaking — tap the mic to interrupt`,
     };
@@ -218,7 +230,7 @@ export class Chat {
   onAction() {
     unlockAudio();
     this.claim();
-    if (this.listening) { listener.stop(); return; }
+    if (this.listening) { this.finishTurn(); return; }
     if (this.busy) { this.abort?.abort(); return; }
     if (this.input.value.trim()) { this.send(this.input.value); return; }
     this.startListening();
@@ -247,7 +259,7 @@ export class Chat {
 
   /** Stop mic + voice (tab switch, app hidden). */
   pause() {
-    if (this.listening) { listener.cancel(); this.listening = false; }
+    if (this.listening) this.stopListening();
     speaker.stop();
     if (!this.busy) this.setStatus('idle'); else this.updateAction();
   }
@@ -255,40 +267,90 @@ export class Chat {
   isVisible() { return !document.hidden && this.el.offsetParent !== null; }
 
   /* ---------- voice input ---------- */
+  /**
+   * The mic stays open across the recogniser's own stop/start cycles, so a pause
+   * mid-sentence doesn't end your turn. What you said is sent only after a real
+   * silence (Settings → pause length), or straight away when you tap the button.
+   */
   startListening() {
     if (!canListen || this.busy || this.listening) return;
     this.claim();
     speaker.stop();
-    const base = this.input.value.trim();
+    this.base = this.input.value.trim();
+    this.heard = '';
+    this.noSpeechRuns = 0;
     this.listening = true;
     this.setStatus('listening');
+    this.openMic();
+  }
+
+  joined(live = '') {
+    return [this.base, this.heard, live].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+  }
+
+  openMic() {
+    if (!this.listening) return;
     const ok = listener.start({
-      onText: (t) => { this.input.value = (base ? base + ' ' : '') + t; this.autosize(); },
+      onText: (t) => {
+        if (!this.listening) return;
+        this.input.value = this.joined(t);
+        this.autosize();
+        this.armSilence();     // every word heard resets the pause timer
+      },
       onEnd: ({ text, error, cancelled }) => {
-        this.listening = false;
-        if (cancelled) { this.setStatus('idle'); return; }
+        if (cancelled || !this.listening) return;
         if (error === 'not-allowed' || error === 'service-not-allowed') {
           store.state.settings.handsFree = false; store.save();
           this.hfBtn.setAttribute('aria-pressed', 'false');
-          this.setStatus('idle', 'Microphone blocked — allow mic access for this site, then try again.');
+          this.stopListening('Microphone blocked — allow mic access for this site, then try again.');
           return;
         }
-        const full = this.input.value.trim();
-        if (text && full) {
-          if (store.state.settings.autoSend) this.send(full);
-          else { this.setStatus('idle', 'Check the text, then tap send'); this.input.focus(); }
+        if (error === 'audio-capture') { this.stopListening('No microphone found.'); return; }
+        if (error === 'network') { this.stopListening('Speech recognition needs an internet connection.'); return; }
+        if (text) {
+          this.heard = [this.heard, text].filter(Boolean).join(' ');
+          this.input.value = this.joined();
+          this.autosize();
+          this.noSpeechRuns = 0;
+        } else {
+          this.noSpeechRuns++;
+        }
+        // Nothing at all after a few tries: stop rather than leaving the mic open forever.
+        if (!this.heard && this.noSpeechRuns >= 3) {
+          this.stopListening("Didn't catch that — tap the mic and try again.");
           return;
         }
-        let note = '';
-        if (error === 'no-speech' || (!error && !text)) note = "Didn't catch that — tap the mic and try again.";
-        else if (error === 'network') note = 'Speech recognition needs an internet connection.';
-        else if (error === 'audio-capture') note = 'No microphone found.';
-        else if (error === 'start-failed') note = "Couldn't start the microphone — tap the mic to try again.";
-        else if (error) note = 'Voice input stopped (' + error + '). Tap the mic to try again.';
-        this.setStatus('idle', note);
+        if (this.heard && this.noSpeechRuns >= 6) { this.finishTurn(); return; }
+        this.armSilence();
+        clearTimeout(this.restartTimer);
+        this.restartTimer = setTimeout(() => this.openMic(), 150);
       },
     });
-    if (!ok) { this.listening = false; this.setStatus('idle', "Couldn't start the microphone."); }
+    if (!ok) this.stopListening("Couldn't start the microphone.");
+  }
+
+  /** Waiting for a real pause before sending. */
+  armSilence() {
+    clearTimeout(this.silenceTimer);
+    if (!store.state.settings.autoSend) return;   // manual mode: you tap to send
+    const ms = Math.max(800, Number(store.state.settings.pauseMs) || 3000);
+    this.silenceTimer = setTimeout(() => this.finishTurn(), ms);
+  }
+
+  finishTurn() {
+    if (!this.listening) return;
+    const text = this.input.value.trim();
+    this.stopListening();
+    if (text) this.send(text);
+    else this.setStatus('idle', "Didn't catch that — tap the mic and try again.");
+  }
+
+  stopListening(note = '') {
+    clearTimeout(this.silenceTimer);
+    clearTimeout(this.restartTimer);
+    this.listening = false;
+    listener.cancel();
+    this.setStatus('idle', note);
   }
 
   /* ---------- sending ---------- */

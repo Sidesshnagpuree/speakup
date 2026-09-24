@@ -5,6 +5,7 @@ import { callTool } from './ai.js';
 import { typeLabel, WORD_TOOL, wordSystem, wordUser } from './prompts.js';
 import { canSpeak, canListen, say, unlockAudio, listener, speaker } from './speech.js';
 import { markChanges, similarity } from './diff.js';
+import { PACKS, SWAPS, drillPrompt } from './phrases.js';
 
 const DAY = 86400000;
 const INTERVALS = [5 * 60000, DAY, 3 * DAY, 7 * DAY];
@@ -28,11 +29,17 @@ export function createReview(app) {
     const top = el.scrollTop;
     el.replaceChildren();
     const wrap = h('div', { class: 'pad' });
-    wrap.append(seg([['mistakes', `Mistakes (${st.mistakes.filter((m) => !m.mastered).length})`], ['words', `My words (${st.vocab.length})`]], tab, (v) => { tab = v; render(); }));
+    wrap.append(seg([
+      ['mistakes', `Mistakes (${st.mistakes.filter((m) => !m.mastered).length})`],
+      ['words', `Words (${st.vocab.length})`],
+      ['phrases', 'US phrases'],
+    ], tab, (v) => { tab = v; render(); }));
     const body = h('div', { style: { marginTop: '14px' } });
     wrap.append(body);
     el.append(wrap);
-    if (tab === 'mistakes') renderMistakes(body); else renderWords(body);
+    if (tab === 'mistakes') renderMistakes(body);
+    else if (tab === 'words') renderWords(body);
+    else renderPhrases(body);
     el.scrollTop = top;
   }
 
@@ -250,6 +257,73 @@ export function createReview(app) {
           }))));
     });
     body.append(list);
+  }
+
+  /* ---------- everyday American English ---------- */
+  let phraseQuery = '';
+  function renderPhrases(body) {
+    body.append(h('p', { class: 'muted small', style: { margin: '0 0 12px' } },
+      'The wording US colleagues and clients actually use. Tap a line to hear it, ',
+      h('b', null, '+'), ' saves it to your words, and each set has a drill you can talk through.'));
+
+    const search = h('input', {
+      class: 'input', type: 'search', placeholder: 'Search phrases…', value: phraseQuery, 'aria-label': 'Search phrases',
+      oninput: (e) => { phraseQuery = e.target.value; render(); },
+    });
+    body.append(search);
+
+    const q = phraseQuery.trim().toLowerCase();
+    const match = (t) => !q || t.toLowerCase().includes(q);
+
+    // Indian English → US English swaps
+    const swaps = SWAPS.filter((s) => match(s.avoid) || match(s.say) || match(s.note || ''));
+    if (swaps.length) {
+      const list = h('div', null, swaps.map((s) => h('div', { class: 'swap' },
+        h('div', { class: 'row' },
+          h('div', { class: 'grow' },
+            h('div', { class: 'swap-line' }, h('s', null, s.avoid), ' → ', h('b', null, s.say)),
+            s.note ? h('div', { class: 'why' }, s.note) : null),
+          speakBtn(s.say)))));
+      body.append(h('details', { class: 'card pack', open: !!q || undefined },
+        h('summary', null, h('b', null, 'Sounds off to Americans'), h('span', { class: 'tag bad' }, `${swaps.length}`)),
+        h('p', { class: 'muted small', style: { margin: '6px 0 10px' } }, 'Common Indian-English wording and what to say instead.'),
+        list));
+    }
+
+    for (const pack of PACKS) {
+      const items = pack.items.filter((i) => match(i.p) || match(i.m) || match(i.e || ''));
+      if (!items.length) continue;
+      const rows = items.map((i) => {
+        const saved = hasWord(i.p);
+        const add = h('button', {
+          class: 'icon-btn', 'aria-label': saved ? 'Already saved' : 'Save to my words', title: saved ? 'Saved' : 'Save to my words',
+          style: { color: saved ? 'var(--good)' : 'var(--muted)' }, html: saved ? I.check : I.plus,
+          onclick: (e) => {
+            addWord({ word: i.p, meaning: i.m, example: i.e || '', source: 'phrases' });
+            store.save();
+            e.currentTarget.innerHTML = I.check;
+            e.currentTarget.style.color = 'var(--good)';
+            toast('Saved to your words');
+          },
+        });
+        return h('div', { class: 'phrase-row' },
+          h('div', { class: 'grow' },
+            h('div', { class: 'phrase-text' }, i.p),
+            h('div', { class: 'why' }, i.m),
+            i.e ? h('div', { class: 'phrase-ex' }, '“' + i.e + '”') : null,
+            i.r ? h('div', { class: 'phrase-ex' }, h('b', null, 'Reply: '), '“' + i.r + '”') : null),
+          speakBtn(i.r ? i.p + ' … ' + i.r : (i.e || i.p)),
+          add);
+      });
+      body.append(h('details', { class: 'card pack', open: !!q || undefined },
+        h('summary', null, h('span', { class: 'ic', html: I[pack.icon] || I.chat }), h('b', null, pack.title), h('span', { class: 'tag' }, String(items.length))),
+        h('p', { class: 'muted small', style: { margin: '6px 0 10px' } }, pack.blurb),
+        h('div', null, rows),
+        btn('Practise these out loud', () => {
+          if (!getApiKey()) { app.needKey(); return; }
+          app.startDrill(drillPrompt(pack));
+        }, { cls: 'soft block', ico: 'mic', attrs: { style: 'margin-top:12px' } })));
+    }
   }
 
   render();

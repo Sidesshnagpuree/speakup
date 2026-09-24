@@ -12,6 +12,7 @@ export const DEFAULT_SETTINGS = {
   rate: 1,
   autoSpeak: true,
   autoSend: true,
+  pauseMs: 3000,             // silence to wait for before sending what you said
   handsFree: false,
   corrections: true,
   correctionStyle: 'natural', // errors | natural
