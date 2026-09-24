@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <title>SpeakUp – AI English Tutor</title>
+  <meta name="description" content="Practise spoken English with an AI tutor.">
+  <meta name="theme-color" content="#4f46e5">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="SpeakUp">
+  <link rel="stylesheet" href="app.css">
+  <script>
+    // Apply saved theme before first paint to avoid a flash.
+    try {
+      var s = JSON.parse(localStorage.getItem('speakup.v1') || '{}');
+      var t = s && s.settings && s.settings.theme;
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  </script>
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <h1 id="title">SpeakUp</h1>
+      <div class="topbar-actions" id="topbar-actions"></div>
+      <button class="icon-btn" id="btn-settings" aria-label="Settings"></button>
+    </header>
+    <main id="views"></main>
+    <nav class="tabbar" id="tabbar" aria-label="Sections"></nav>
+  </div>
+  <div id="sheets"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <noscript>SpeakUp needs JavaScript to run.</noscript>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
