@@ -2,7 +2,7 @@
 import { h, iconBtn, toast, dots } from './ui.js';
 import { I } from './icons.js';
 import { store, uid, recordSentence, recordCheck, addMistakes, addWord, hasWord } from './store.js';
-import { streamText, callTool } from './claude.js';
+import { streamText, callTool } from './ai.js';
 import { speaker, listener, canListen, canSpeak, unlockAudio, say, onSpeakingChange } from './speech.js';
 import { correctionSystem, correctionUser, CORRECTION_TOOL, MISTAKE_TYPES } from './prompts.js';
 import { markChanges, sameText } from './diff.js';

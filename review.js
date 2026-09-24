@@ -1,7 +1,7 @@
 import { h, iconBtn, btn, openSheet, toast, seg, dots, relTime, confirmSheet } from './ui.js';
 import { I } from './icons.js';
 import { store, todayKey, dueMistakes, addWord, hasWord, getApiKey } from './store.js';
-import { callTool } from './claude.js';
+import { callTool } from './ai.js';
 import { typeLabel, WORD_TOOL, wordSystem, wordUser } from './prompts.js';
 import { canSpeak, canListen, say, unlockAudio, listener, speaker } from './speech.js';
 import { markChanges, similarity } from './diff.js';

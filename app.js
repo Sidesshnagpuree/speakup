@@ -1,6 +1,7 @@
 import { h, toast } from './ui.js';
 import { I } from './icons.js';
 import { store, getApiKey, dueMistakes } from './store.js';
+import { PROVIDERS, providerId } from './ai.js';
 import { createTalk } from './talk.js';
 import { createRoleplay } from './roleplay.js';
 import { createReview } from './review.js';
@@ -48,7 +49,12 @@ const app = {
     const v = this.views[this.current];
     if (!v) return;
     document.getElementById('title').textContent = v.title;
-    document.getElementById('topbar-actions').replaceChildren(...(v.actions?.() || []));
+    const p = PROVIDERS[providerId()];
+    const pill = h('button', {
+      class: 'engine-pill', type: 'button', title: 'AI engine — tap to change',
+      onclick: () => import('./settings.js').then((m) => m.openSettings(app)),
+    }, p.label, p.tag === 'free' ? h('span', null, 'free') : null);
+    document.getElementById('topbar-actions').replaceChildren(pill, ...(v.actions?.() || []));
   },
 
   refreshBadges() {
@@ -70,7 +76,7 @@ const app = {
   },
 
   needKey() {
-    toast('Add your Claude API key first', { action: 'Set up', onAction: () => openOnboarding(app, { startStep: 2 }), ms: 5000 });
+    toast(`Add your ${PROVIDERS[providerId()].label} API key first`, { action: 'Set up', onAction: () => openOnboarding(app, { startStep: 2 }), ms: 5000 });
   },
 };
 

@@ -1,6 +1,7 @@
 import { h, btn, ring, relTime, toast } from './ui.js';
 import { I } from './icons.js';
 import { store, todayKey, streakInfo, dayStats, usageSummary } from './store.js';
+import { PROVIDERS, providerId } from './ai.js';
 import { typeLabel } from './prompts.js';
 
 const fmtUsd = (n) => (n < 0.01 && n > 0 ? '< $0.01' : '$' + n.toFixed(2));
@@ -105,12 +106,16 @@ export function createProgress(app) {
 
     // usage
     const u = usageSummary();
+    const p = PROVIDERS[providerId()];
     wrap.append(h('div', { class: 'card' },
-      h('h3', null, 'Claude API usage (estimate)'),
+      h('h3', null, 'API usage (estimate)'),
       h('div', { class: 'kv' }, h('span', null, 'Today'), h('b', null, `${fmtUsd(u.today.cost)} · ${u.today.calls} calls`)),
       h('div', { class: 'kv' }, h('span', null, 'This month'), h('b', null, fmtUsd(u.month.cost))),
       h('div', { class: 'kv' }, h('span', null, 'All time'), h('b', null, fmtUsd(u.all.cost))),
-      h('p', { class: 'muted small', style: { margin: '8px 0 0' } }, 'Estimated from token counts at list prices. Your exact bill is in the Anthropic Console.')));
+      h('p', { class: 'muted small', style: { margin: '8px 0 0' } },
+        p.tag === 'free'
+          ? `You're on ${p.label}'s free tier, so these calls cost nothing. Calls made earlier on a paid engine are still counted above.`
+          : 'Estimated from token counts at list prices. Your exact bill is in the provider\'s console.')));
 
     // backup
     wrap.append(h('div', { class: 'card' },

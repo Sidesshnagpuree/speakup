@@ -2,9 +2,10 @@ import { h, icon, btn, openSheet, confirmSheet, toast, field, seg, toggle, ring,
 import { I } from './icons.js';
 import { store, uid, getApiKey, addWord, hasWord } from './store.js';
 import { Chat } from './chat.js';
-import { callTool, reportModel } from './claude.js';
+import { callTool, reportModel } from './ai.js';
 import { SCENARIOS, scenarioById, DIFFICULTY, roleplaySystem, ROLEPLAY_KICKOFF, REPORT_TOOL, reportSystem } from './prompts.js';
 import { canSpeak, say, unlockAudio } from './speech.js';
+import { providerId } from './ai.js';
 
 const SCORE_LABELS = { grammar: 'Grammar', vocabulary: 'Vocabulary', fluency: 'Fluency', professionalism: 'Professional tone', content: 'Answer quality' };
 
@@ -74,6 +75,15 @@ export function createRoleplay(app) {
         body.append(h('div', { class: 'field' }, h('span', { class: 'label' }, 'Difficulty'),
           seg(Object.entries(DIFFICULTY).map(([k, v]) => [k, v.label]), cfg.difficulty, (v) => { cfg.difficulty = v; })));
         body.append(h('div', { style: { marginTop: '8px' } }, toggle('Show corrections as I speak', cfg.corrections, (v) => { cfg.corrections = v; }, 'Turn off for a more realistic, uninterrupted session')));
+        if (providerId() === 'gemini') {
+          const swap = getApiKey('claude')
+            ? btn('Use Claude instead', () => { store.state.settings.provider = 'claude'; store.save(); api.close(); app.updateHeader(); openSetup(sc); }, { cls: 'sm', attrs: {} })
+            : null;
+          body.append(h('div', { class: 'note', style: { marginTop: '14px' } },
+            h('b', null, 'On Gemini\'s free tier: '),
+            'Google may use what you say here to improve their products. Keep your employer, client names and salary figures out of it — or switch to Claude for this one.',
+            swap ? h('div', { style: { marginTop: '8px' } }, swap) : null));
+        }
         body.append(h('div', { style: { marginTop: '16px' } },
           btn('Start role-play', () => {
             if (sc.id === 'custom' && !cfg.custom.trim()) { toast('Describe the situation first'); return; }

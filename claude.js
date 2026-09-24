@@ -1,5 +1,6 @@
-// Direct calls from the phone to the Anthropic Messages API.
+// Anthropic (Claude) adapter — calls the Messages API straight from the phone.
 import { store, getApiKey, recordUsage } from './store.js';
+import { ApiError } from './errors.js';
 
 const API = 'https://api.anthropic.com/v1/messages';
 
@@ -18,14 +19,6 @@ export function reportModel() {
   return s.smartReports ? MODELS.smart.id : chatModel();
 }
 
-export class ApiError extends Error {
-  constructor(message, code = 'error', status = 0) {
-    super(message);
-    this.code = code;
-    this.status = status;
-  }
-}
-
 function headers(key) {
   return {
     'content-type': 'application/json',
@@ -40,7 +33,7 @@ async function toError(res) {
   try { body = await res.json(); } catch (e) { /* ignore */ }
   const m = body?.error?.message || res.statusText || 'Request failed';
   const t = body?.error?.type || '';
-  if (res.status === 401) return new ApiError('Your API key was rejected. Check it in Settings.', 'auth', 401);
+  if (res.status === 401) return new ApiError('Your Claude API key was rejected. Check it in Settings.', 'auth', 401);
   if (/credit balance/i.test(m)) return new ApiError('Your Anthropic account is out of credits. Add credits at console.anthropic.com → Billing.', 'credits', res.status);
   if (res.status === 403) return new ApiError('This API key is not allowed to do that (' + m + ').', 'forbidden', 403);
   if (res.status === 404 || t === 'not_found_error') return new ApiError(`That model isn't available (${m}). Pick another model in Settings.`, 'model', res.status);
@@ -51,7 +44,7 @@ async function toError(res) {
 }
 
 async function post(body, { signal, key } = {}) {
-  const k = key || getApiKey();
+  const k = key || getApiKey('claude');
   if (!k) throw new ApiError('Add your Claude API key in Settings first.', 'nokey', 0);
   let res;
   try {

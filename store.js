@@ -1,6 +1,6 @@
 // All app data lives in this phone's browser storage (localStorage).
 const KEY = 'speakup.v1';
-const KEY_API = 'speakup.apikey';
+const API_KEYS = { claude: 'speakup.apikey', gemini: 'speakup.apikey.gemini' };
 
 export const DEFAULT_SETTINGS = {
   name: '',
@@ -17,8 +17,11 @@ export const DEFAULT_SETTINGS = {
   correctionStyle: 'natural', // errors | natural
   tutorName: 'Maya',
   dailyGoal: 20,
+  provider: 'claude',        // claude (paid, private) | gemini (free tier)
   model: 'fast',             // fast | smart
-  modelOverride: '',
+  modelOverride: '',         // Claude: exact model id
+  geminiModel: '',           // Gemini: exact model id
+  geminiModelList: [],       // models this key can use, fetched when the key is saved
   smartReports: true,
   theme: 'system',
   onboarded: false,
@@ -96,15 +99,19 @@ export const store = {
   },
 };
 
-export function getApiKey() {
-  try { return localStorage.getItem(KEY_API) || ''; } catch (e) { return ''; }
+const keyName = (provider) => API_KEYS[provider] || API_KEYS[store.state.settings.provider] || API_KEYS.claude;
+
+/** The API key for a provider (defaults to the one in use). */
+export function getApiKey(provider) {
+  try { return localStorage.getItem(keyName(provider)) || ''; } catch (e) { return ''; }
 }
-export function setApiKey(k) {
+export function setApiKey(k, provider) {
   try {
-    if (k) localStorage.setItem(KEY_API, k.trim());
-    else localStorage.removeItem(KEY_API);
+    if (k) localStorage.setItem(keyName(provider), k.trim());
+    else localStorage.removeItem(keyName(provider));
   } catch (e) { /* ignore */ }
 }
+export const hasAnyKey = () => !!(getApiKey('claude') || getApiKey('gemini'));
 
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 export const todayKey = (d = new Date()) => d.toLocaleDateString('en-CA'); // YYYY-MM-DD, local time
@@ -154,6 +161,7 @@ export function streakInfo() {
 
 /* ---------- API usage & cost estimate ---------- */
 const PRICES = [ // USD per million tokens [input, output]
+  [/gemini/i, 0, 0], // free tier
   [/haiku/i, 1, 5],
   [/sonnet/i, 2, 10],
   [/opus/i, 5, 25],

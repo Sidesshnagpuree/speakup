@@ -81,6 +81,12 @@ svg { flex: none; }
 }
 .topbar h1 { font-size: 20px; font-weight: 700; margin: 0; flex: 1; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar-actions { display: flex; gap: 4px; }
+.engine-pill {
+  height: 30px; padding: 0 10px; border-radius: 15px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-2); font-size: 12px; font-weight: 700;
+  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+}
+.engine-pill span { background: var(--good-soft); color: var(--good); border-radius: 7px; padding: 1px 5px; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
 .icon-btn {
   width: 40px; height: 40px; border-radius: 12px; border: 0; background: transparent;
   display: inline-grid; place-items: center; color: var(--text-2);

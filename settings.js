@@ -1,19 +1,21 @@
 import { h, btn, openSheet, toast, field, seg, toggle, confirmSheet } from './ui.js';
 import { I } from './icons.js';
 import { store, getApiKey, setApiKey } from './store.js';
-import { MODELS, testKey } from './claude.js';
+import { PROVIDERS, providerId, testKey, listModels } from './ai.js';
 import { LEVELS, ACCENTS, STT_LANGS } from './prompts.js';
 import { canListen, canSpeak, englishVoices, say, unlockAudio } from './speech.js';
 
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.1.0';
 
 const levelSeg = (s, onChange) => seg(Object.entries(LEVELS).map(([k, v]) => [k, v.label]), s.level, onChange);
 
-function keyField(onSaved) {
+/** Key input + "Save & test" for one provider. */
+function keyField(pid, onSaved) {
+  const p = PROVIDERS[pid];
   const wrap = h('div');
   const input = h('input', {
     class: 'input', type: 'password', autocomplete: 'off', spellcheck: 'false', autocapitalize: 'off',
-    placeholder: 'sk-ant-…', value: getApiKey(), 'aria-label': 'Claude API key',
+    placeholder: p.keyHint, value: getApiKey(pid), 'aria-label': p.label + ' API key',
   });
   const showBtn = h('button', { class: 'btn sm', type: 'button', onclick: () => { input.type = input.type === 'password' ? 'text' : 'password'; showBtn.textContent = input.type === 'password' ? 'Show' : 'Hide'; } }, 'Show');
   const msg = h('div', { class: 'hint' });
@@ -21,20 +23,32 @@ function keyField(onSaved) {
   save.addEventListener('click', async () => {
     const k = input.value.trim();
     if (!k) { msg.textContent = 'Paste your key first.'; msg.style.color = 'var(--bad)'; return; }
-    if (!/^sk-ant-/.test(k)) { msg.textContent = 'That doesn\'t look like a Claude key (they start with sk-ant-).'; msg.style.color = 'var(--bad)'; return; }
+    if (!p.keyPattern.test(k)) { msg.textContent = `That doesn't look like a ${p.label} key (they start with ${p.keyHint.replace('…', '')}).`; msg.style.color = 'var(--bad)'; return; }
     save.disabled = true; msg.style.color = ''; msg.textContent = 'Testing…';
+    const before = getApiKey(pid);
     try {
-      await testKey(k);
-      setApiKey(k);
+      setApiKey(k, pid);          // adapters read the stored key
+      await testKey(k, pid);
       msg.textContent = '✓ Key works and is saved on this phone.'; msg.style.color = 'var(--good)';
+      if (pid === 'gemini') {
+        const models = await listModels(k);
+        if (models.length) { store.state.settings.geminiModelList = models; store.save(); }
+      }
       onSaved?.();
     } catch (e) {
+      setApiKey(before, pid);
       msg.textContent = e.message; msg.style.color = 'var(--bad)';
     }
     save.disabled = false;
   });
   wrap.append(input, h('div', { class: 'row', style: { marginTop: '8px' } }, showBtn, h('span', { class: 'grow' }), save), msg);
   return wrap;
+}
+
+function providerNote(pid) {
+  const p = PROVIDERS[pid];
+  return h('div', { class: pid === 'gemini' ? 'note' : 'hint', style: { marginTop: '10px' } },
+    h('b', null, p.tag === 'free' ? 'Free: ' : 'Paid: '), p.blurb);
 }
 
 function voiceSelect(s) {
@@ -50,6 +64,47 @@ function voiceSelect(s) {
   return sel;
 }
 
+/** Provider picker + key + models. Used in Settings and in onboarding. */
+export function providerGroup(app, onChange) {
+  const s = store.state.settings;
+  const box = h('div');
+  const draw = () => {
+    const pid = providerId();
+    const p = PROVIDERS[pid];
+    const M = p.adapter.MODELS;
+    const body = [];
+    body.push(h('div', { class: 'field' }, h('span', { class: 'label' }, 'AI engine'),
+      seg(Object.values(PROVIDERS).map((x) => [x.id, x.label + (x.tag === 'free' ? ' · free' : '')]), pid, (v) => {
+        s.provider = v; store.save(); draw(); onChange?.();
+      })));
+    body.push(providerNote(pid));
+    body.push(h('div', { class: 'divider' }));
+    body.push(h('div', { class: 'field' }, h('span', { class: 'label' }, `${p.label} API key`), keyField(pid, () => onChange?.())));
+    body.push(h('small', { class: 'hint' }, 'Stored only in this phone\'s browser. Get a key at ',
+      h('a', { href: p.keyUrl, target: '_blank', rel: 'noopener' }, p.keyUrl.replace('https://', '').split('/')[0]), '.'));
+    body.push(h('div', { class: 'divider' }));
+    body.push(field('Model', seg([['fast', M.fast.name], ['smart', M.smart.name]], s.model, (v) => { s.model = v; store.save(); onChange?.(); }),
+      `${M.fast.name}: ${M.fast.note}. ${M.smart.name}: ${M.smart.note}.`));
+    body.push(toggle(`Use ${M.smart.name} for role-play reports`, s.smartReports, (v) => { s.smartReports = v; store.save(); }, 'End-of-session feedback is worth the better model'));
+    if (pid === 'gemini') {
+      const list = s.geminiModelList || [];
+      const sel = h('select', { class: 'select input', 'aria-label': 'Gemini model' },
+        h('option', { value: '' }, 'Automatic (recommended)'),
+        ...list.map((m) => h('option', { value: m.id, selected: m.id === s.geminiModel }, m.label ? `${m.label} (${m.id})` : m.id)));
+      sel.addEventListener('change', () => { s.geminiModel = sel.value; store.save(); });
+      body.push(h('details', { style: { marginTop: '8px' } }, h('summary', { class: 'muted small', style: { cursor: 'pointer' } }, 'Advanced'),
+        field('Exact Gemini model', sel, list.length ? 'Models this key can use.' : 'Save your key to load the list.')));
+    } else {
+      body.push(h('details', { style: { marginTop: '8px' } }, h('summary', { class: 'muted small', style: { cursor: 'pointer' } }, 'Advanced'),
+        field('Custom model ID', h('input', { class: 'input', value: s.modelOverride, placeholder: 'e.g. claude-opus-5', spellcheck: 'false', autocapitalize: 'off', oninput: (e) => { s.modelOverride = e.target.value.trim(); store.save(); } }),
+          'Overrides the model above. Leave empty normally.')));
+    }
+    box.replaceChildren(...body);
+  };
+  draw();
+  return box;
+}
+
 export function openSettings(app) {
   const s = store.state.settings;
   const save = () => { store.save(); };
@@ -60,20 +115,8 @@ export function openSettings(app) {
     full: true,
     onClose: () => app.refreshAll(),
     content: (body) => {
-      // --- Claude
-      body.append(h('div', { class: 'group' },
-        h('h3', null, 'Claude API key'),
-        keyField(),
-        h('small', { class: 'hint' }, 'Stored only in this phone\'s browser. Get a key at ', h('a', { href: 'https://console.anthropic.com/settings/keys', target: '_blank', rel: 'noopener' }, 'console.anthropic.com'), '.'),
-        h('div', { class: 'divider' }),
-        field('Model', seg(Object.entries(MODELS).map(([k, v]) => [k, v.name]), s.model, (v) => { s.model = v; save(); }),
-          `${MODELS.fast.name}: ${MODELS.fast.note}. ${MODELS.smart.name}: ${MODELS.smart.note}.`),
-        toggle('Smarter model for role-play reports', s.smartReports, (v) => { s.smartReports = v; save(); }, `Uses ${MODELS.smart.name} for end-of-session feedback`),
-        h('details', { style: { marginTop: '8px' } }, h('summary', { class: 'muted small', style: { cursor: 'pointer' } }, 'Advanced'),
-          field('Custom model ID', h('input', { class: 'input', value: s.modelOverride, placeholder: 'e.g. claude-opus-5', spellcheck: 'false', autocapitalize: 'off', oninput: (e) => { s.modelOverride = e.target.value.trim(); save(); } }),
-            'Overrides the model above for everything. Leave empty normally.'))));
+      body.append(h('div', { class: 'group' }, h('h3', null, 'AI engine'), providerGroup(app, () => app.updateHeader())));
 
-      // --- You
       body.append(h('div', { class: 'group' },
         h('h3', null, 'About you'),
         field('Your name', h('input', { class: 'input', value: s.name, placeholder: 'What should the tutor call you?', oninput: (e) => { s.name = e.target.value; save(); } })),
@@ -81,7 +124,6 @@ export function openSettings(app) {
         h('div', { class: 'field' }, h('span', { class: 'label' }, 'English level'), levelSeg(s, (v) => { s.level = v; save(); })),
         field('Daily goal', seg([[10, '10'], [20, '20'], [30, '30'], [50, '50']], Number(s.dailyGoal), (v) => { s.dailyGoal = v; save(); }), 'Sentences per day')));
 
-      // --- Voice
       body.append(h('div', { class: 'group' },
         h('h3', null, 'Voice'),
         !canListen ? h('div', { class: 'note', style: { marginBottom: '10px' } }, 'Voice input isn\'t available in this browser. Use Chrome on Android (or Safari on iPhone) for speaking practice.') : null,
@@ -96,33 +138,30 @@ export function openSettings(app) {
         toggle('Send automatically when I stop speaking', s.autoSend, (v) => { s.autoSend = v; save(); }, 'Turn off if it cuts you off when you pause — then tap the mic again to keep adding, and send when ready'),
         toggle('Hands-free mode', s.handsFree, (v) => { s.handsFree = v; save(); }, 'Mic opens by itself after each reply')));
 
-      // --- Tutor
       body.append(h('div', { class: 'group' },
         h('h3', null, 'Tutor'),
         field('Tutor\'s name', h('input', { class: 'input', value: s.tutorName, oninput: (e) => { s.tutorName = e.target.value.trim() || 'Maya'; save(); } })),
         toggle('Correct my sentences in Talk', s.corrections, (v) => { s.corrections = v; save(); }),
         field('Correction style', seg([['errors', 'Mistakes only'], ['natural', 'Mistakes + natural phrasing']], s.correctionStyle, (v) => { s.correctionStyle = v; save(); }))));
 
-      // --- Appearance
       body.append(h('div', { class: 'group' },
         h('h3', null, 'Appearance'),
         seg([['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], s.theme, (v) => { s.theme = v; save(); app.applyTheme(); })));
 
-      // --- Data
       body.append(h('div', { class: 'group' },
         h('h3', null, 'Data'),
-        h('p', { class: 'muted small', style: { marginTop: 0 } }, 'Everything is stored on this phone. Your sentences are sent only to Anthropic\'s API to generate replies and corrections. Export a backup from the Progress tab.'),
+        h('p', { class: 'muted small', style: { marginTop: 0 } }, 'Everything is stored on this phone. Your sentences go only to the AI engine you picked above. Export a backup from the Progress tab.'),
         h('div', { class: 'row wrap' },
-          btn('Remove API key', async () => {
-            if (!(await confirmSheet('Remove your API key from this phone?', { ok: 'Remove', danger: true }))) return;
-            setApiKey(''); toast('API key removed'); app.refreshAll();
+          btn('Remove API keys', async () => {
+            if (!(await confirmSheet('Remove your API keys from this phone?', { ok: 'Remove', danger: true }))) return;
+            setApiKey('', 'claude'); setApiKey('', 'gemini'); toast('API keys removed'); app.refreshAll();
           }, { cls: 'sm danger' }),
           btn('Reset all data', async () => {
-            if (!(await confirmSheet('Reset everything?', { ok: 'Reset', danger: true, detail: 'Deletes conversations, mistakes, words, progress and settings on this phone. Your API key stays.' }))) return;
+            if (!(await confirmSheet('Reset everything?', { ok: 'Reset', danger: true, detail: 'Deletes conversations, mistakes, words, progress and settings on this phone. Your API keys stay.' }))) return;
             store.reset(); store.save(); toast('All data reset'); location.reload();
           }, { cls: 'sm danger' }))));
 
-      body.append(h('p', { class: 'muted small', style: { textAlign: 'center', margin: '18px 0 8px' } }, `SpeakUp ${APP_VERSION} · powered by Claude`));
+      body.append(h('p', { class: 'muted small', style: { textAlign: 'center', margin: '18px 0 8px' } }, `SpeakUp ${APP_VERSION}`));
     },
   });
 }
@@ -160,20 +199,16 @@ export function openOnboarding(app, { startStep = 0 } = {}) {
               btn('Continue', () => { store.save(); step = 2; draw(); }, { cls: 'primary grow' })));
         } else {
           d.append(
-            h('h1', null, 'Connect Claude'),
-            h('p', { class: 'lead' }, 'SpeakUp uses your own Claude API key. It stays on this phone.'),
-            h('ol', null,
-              h('li', null, 'Open ', h('a', { href: 'https://console.anthropic.com/settings/keys', target: '_blank', rel: 'noopener' }, 'console.anthropic.com → API keys'), ' and sign in.'),
-              h('li', null, 'Add a few dollars of credit under Billing (pay-as-you-go).'),
-              h('li', null, 'Create a key, copy it and paste it below.')),
-            keyField(() => setTimeout(() => finish(), 700)),
-            h('div', { class: 'note', style: { marginTop: '14px' } }, `Cost guide: with ${MODELS.fast.name}, a 15-minute voice session is usually around 10–20 US cents. Live usage is shown in Progress.`),
+            h('h1', null, 'Connect an AI'),
+            h('p', { class: 'lead' }, 'SpeakUp uses your own key. It stays on this phone, and you can switch engines any time in Settings.'),
+            providerGroup(app, () => { if (getApiKey()) finishBtn.replaceChildren('Finish'); }),
             h('div', { class: 'row', style: { marginTop: '20px' } },
               btn('Back', () => { step = 1; draw(); }, { cls: 'grow' }),
-              btn(getApiKey() ? 'Finish' : 'Skip for now', () => finish(), { cls: 'grow' + (getApiKey() ? ' primary' : '') })));
+              (finishBtn = btn(getApiKey() ? 'Finish' : 'Skip for now', () => finish(), { cls: 'grow primary' }))));
         }
         body.append(d);
       };
+      let finishBtn;
       const finish = () => { s.onboarded = true; store.save(); api.close(); app.refreshAll(); };
       draw();
     },

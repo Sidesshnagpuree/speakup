@@ -1,6 +1,6 @@
 // SpeakUp service worker: network-first for the app shell (so updates arrive
 // as soon as you're online), cached copy when offline. API calls are never cached.
-const CACHE = 'speakup-v1';
+const CACHE = 'speakup-v2';
 const SHELL = [
   './',
   './index.html',
@@ -11,6 +11,9 @@ const SHELL = [
   './icons.js',
   './store.js',
   './claude.js',
+  './gemini.js',
+  './ai.js',
+  './errors.js',
   './speech.js',
   './prompts.js',
   './diff.js',
